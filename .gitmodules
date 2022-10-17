@@ -1,0 +1,3 @@
+[submodule "xgboost"]
+	path = xgboost
+	url = git@github.com:avilog/xgboost.git
