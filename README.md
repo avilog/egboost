@@ -21,6 +21,7 @@ cd build
 cmake ..
 make -j$(nproc)
 ```
+
 For more details on building XGboost from source, see `build <https://xgboost.readthedocs.io/en/latest/build.html>`_.
 
 # Description
