@@ -1047,14 +1047,12 @@ def cross_validate(file_name, func_eva, save_summary=True, only_gams=False, data
     E_BF = egboost.FeatureTraverse.BEST_FIT
     E_R = egboost.FeatureTraverse.RANDOM
     E_C = egboost.FeatureTraverse.CYCLIC
-    E_CR = egboost.FeatureTraverse.CYCLIC_RANDOM
-    E_CRR = egboost.FeatureTraverse.CYCLIC_RANDOM_REVERSE
     E_CRE = egboost.FeatureTraverse.CYCLIC_REVERSE
 
     grid = ParameterGrid(
-        {'dataset_fun': datasets_list, 'base_model': [ "EGB_XGB_GAM", "EBM_GAM",  "EBM_GA2M", "EGB_XGB_GA2M", "XGB", "Spline"],
-         'feature_traverse': [[E_CRE, E_CRE], [E_C, E_C], [E_R, E_R], [E_CR, E_CR],[E_CR, E_CR], [E_C, E_BF], [E_BF, E_BF], [E_CRR, E_CRR]],
-         'n_features': [10, 100, 1000] #for feature ordering experiment 2, 10, 100,
+        {'dataset_fun': datasets_list, 'base_model': ["EGB_XGB_GAM", "EBM_GAM",  "EBM_GA2M", "EGB_XGB_GA2M", "XGB", "Spline"],
+         'feature_traverse': [[E_CRE, E_CRE], [E_C, E_C], [E_R, E_R], [E_C, E_BF], [E_BF, E_BF]],
+         'n_features': [10, 100, 1000]
          })
 
     for grid_i, params in enumerate(grid):
@@ -1068,12 +1066,12 @@ def cross_validate(file_name, func_eva, save_summary=True, only_gams=False, data
         params["reg_l2_inter"] = 4
         params["interactions"] = 0
         params["subsample"] = 1
-        feature_traverse = params["feature_traverse"]
         params['max_bins'] = 256
         params['max_bins_interactions'] = 32
+        feature_traverse = params["feature_traverse"]
 
         if params['dataset_fun'] != gen_synth_data_ordering_exp:
-            if feature_traverse not in [[E_C, E_C], [E_CR, E_CR], [E_CRE, E_CRE], [E_CRR, E_CRR], [E_BF, E_BF], [E_C, E_BF]]:
+            if feature_traverse not in [[E_C, E_C], [E_CRR, E_CRR], [E_BF, E_BF], [E_C, E_BF]]:
                 continue
             if params["n_features"] > 2:
                 continue
