@@ -1,0 +1,14 @@
+,dataset_name,problem,num_rows,num_features,mean_bins_256,mean_bins_32,Positive Rate
+0,synthetic_corr,regression,1000.0,5.0,256.000,32.000,0.0
+1,synthetic_ordering100,regression,1000.0,100.0,256.000,32.000,0.0
+2,breast,classification,,,,,
+3,Crimes,regression,1994.0,100.0,86.730,31.120,0.0
+4,fico,regression,9861.0,24.0,57.958,20.333,0.0
+5,california housing,regression,20639.0,8.0,230.500,32.000,0.0
+6,compass,classification,6172.0,11.0,5.545,4.818,0.4551198963058976
+7,support2,classification,9105.0,29.0,90.724,21.103,0.2591982427237781
+8,bike,regression,17379.0,12.0,23.417,15.167,0.0
+9,churn,classification,7032.0,19.0,33.895,8.158,0.26578498293515357
+10,wine,regression,4898.0,11.0,132.818,32.000,0.0
+11,adult,classification,32561.0,14.0,47.714,19.429,0.2408095574460244
+12,NHANES I,survival,14264.0,79.0,30.215,10.911,0.0

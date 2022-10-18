@@ -1,0 +1,25 @@
+MSinceOldestTradeOpen , continuous variable
+MSinceMostRecentTradeOpen , continuous variable
+AverageMInFile , continuous variable
+NumSatisfactoryTrades , continuous variable
+NumTrades60Ever2DerogPubRec , continuous variable
+NumTrades90Ever2DerogPubRec , continuous variable
+PercentTradesNeverDelq , continuous variable
+MSinceMostRecentDelq , continuous variable
+MaxDelq2PublicRecLast12M , categorical variable: 0 - derogatory comment; 1 - 120+ days delinquent; 2 - 90 days delinquent; 3 - 60 days delinquent; 4 - 30 days delinquent; 5 - unknown delinquency; 6 - current and never delinquent; 7 - all other
+MaxDelqEver , categorical variable: 0 - derogatory comment; 1 - 120+ days delinquent; 2 - 90 days delinquent; 3 - 60 days delinquent; 4 - 30 days delinquent; 5 - unknown delinquency; 6 - current and never delinquent
+NumTotalTrades , continuous variable
+NumTradesOpeninLast12M , continuous variable
+PercentInstallTrades , continuous variable
+MSinceMostRecentInqexcl7days , continuous variable
+NumInqLast6M , continuous variable
+NumInqLast6Mexcl7days , continuous variable
+NetFractionRevolvingBurden , continuous variable
+NetFractionInstallBurden , continuous variable
+NumRevolvingTradesWBalance , continuous variable
+NumInstallTradesWBalance , continuous variable
+NumBank2NatlTradesWHighUtilization , continuous variable
+PercentTradesWBalance , continuous variable
+delinquent , categorical variable: 0 - No; 1 - Yes
+inquiry , categorical variable: 0 - No; 1 - Yes
+ExternalRiskEstimate , continuous variable

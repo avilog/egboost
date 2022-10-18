@@ -1,0 +1,25 @@
+MSinceOldestTradeOpen: cont
+MSinceMostRecentTradeOpen: cont
+AverageMInFile: cont
+NumSatisfactoryTrades: cont
+NumTrades60Ever2DerogPubRec: cont
+NumTrades90Ever2DerogPubRec: cont
+PercentTradesNeverDelq: cont
+MSinceMostRecentDelq: cont
+MaxDelq2PublicRecLast12M: cont
+MaxDelqEver: cont
+NumTotalTrades: cont
+NumTradesOpeninLast12M: cont
+PercentInstallTrades: cont
+MSinceMostRecentInqexcl7days: cont
+NumInqLast6M: cont
+NumInqLast6Mexcl7days: cont
+NetFractionRevolvingBurden: cont
+NetFractionInstallBurden: cont
+NumRevolvingTradesWBalance: cont
+NumInstallTradesWBalance: cont
+NumBank2NatlTradesWHighUtilization: cont
+PercentTradesWBalance: cont
+delinquent: cont
+inquiry: cont
+ExternalRiskEstimate: cont (class)

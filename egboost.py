@@ -10,12 +10,7 @@ from sklearn.utils.validation import check_is_fitted
 import sys
 import gc
 from enum import Enum
-
-# sys.path.insert(0, 'LightGBM/python-package')
-# sys.path.insert(0, 'xgboost/python-package')
-sys.path.insert(0, '/home/avi/git/distributions/engboost/xgboost/python-package')
-
-# import lightgbm as lgb
+sys.path.insert(0, 'xgboost/python-package')
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from itertools import combinations
@@ -25,14 +20,19 @@ DEBUG_MODE = False
 
 
 class FeatureTraverse(Enum):
+    """ Feature traverse method.
+    """
     BEST_FIT = 1
     RANDOM = 2
     CYCLIC = 3
     CYCLIC_RANDOM = 4
+    CYCLIC_RANDOM_REVERSE = 5
+    CYCLIC_REVERSE = 6
 
 
 class ExplainableGBMCore(BaseEstimator, RegressorMixin):
-
+    """ Internal use Explainable Boosting.
+    """
     def __init__(
             self,
             max_rounds,
@@ -43,7 +43,7 @@ class ExplainableGBMCore(BaseEstimator, RegressorMixin):
             preprocessor,
             preprocessor_inter,
             objective,
-            num_leaves,
+            max_leaves,
             reg_l2,
             reg_l1,
             feature_traverse,
@@ -59,7 +59,7 @@ class ExplainableGBMCore(BaseEstimator, RegressorMixin):
         self.feature_traverse = feature_traverse
         self.reg_l2 = reg_l2
         self.reg_l1 = reg_l1
-        self.num_leaves = num_leaves
+        self.max_leaves = max_leaves
         self.objective = objective
         self.model_type = "regression"
         if 'binary' in self.objective:
@@ -94,22 +94,15 @@ class ExplainableGBMCore(BaseEstimator, RegressorMixin):
     def fit(
             self, dataset, interactions=None) \
             -> ExplainableGBMCore:
+        """ Fits model to provided samples.
+
+        Args:
+            dataset: Dataset dictionary.
+            interactions: Selected interactions.
+
+        Returns:
+            Itself.
         """
-        Fit the model.
-
-        Parameters
-        ----------
-        X : np.ndarray of shape (n_samples, n_features)
-            The training data.
-
-        y : np.ndarray, 1-dimensional
-            The target values.
-
-        Returns
-        -------
-        ExplainableBoostingMetaRegressor
-            Fitted regressor.
-        """        """Initialize."""
         if len(self.interactions_chosen) > 0:
             X, X_val = dataset["X_inter"], dataset["X_val_inter"]
         else:
@@ -143,23 +136,31 @@ class ExplainableGBMCore(BaseEstimator, RegressorMixin):
         if len(self.interactions_chosen) > 0:
             self.index_stage = 1
 
-        self.order[self.index_stage] = list(range(X.shape[1]))
+        self.order[self.index_stage] = list(range(len(interaction_constraints_base)))
         if self.feature_traverse[self.index_stage] == FeatureTraverse.BEST_FIT:
             colsample_bytree = 1
         elif self.feature_traverse[self.index_stage] == FeatureTraverse.RANDOM:
             colsample_bytree = 0.0001 # need to be < 0.5
-        elif self.feature_traverse[self.index_stage] in [FeatureTraverse.CYCLIC, FeatureTraverse.CYCLIC_RANDOM]:
-            colsample_bytree = 0.8 # need to be > 0.5
-            if self.feature_traverse[self.index_stage] == FeatureTraverse.CYCLIC_RANDOM:
+        elif self.feature_traverse[self.index_stage] in [FeatureTraverse.CYCLIC, FeatureTraverse.CYCLIC_REVERSE,
+                                                         FeatureTraverse.CYCLIC_RANDOM, FeatureTraverse.CYCLIC_RANDOM_REVERSE]:
+            colsample_bytree = 0.6 # need to be  0.5 < and <1
+            if self.feature_traverse[self.index_stage] in [FeatureTraverse.CYCLIC_RANDOM, FeatureTraverse.CYCLIC_RANDOM_REVERSE]:
                 import random
-                random.seed(self.random_state)
+                if self.feature_traverse[self.index_stage] == FeatureTraverse.CYCLIC_RANDOM_REVERSE and self.random_state % 2 == 1:
+                    random.seed(self.random_state-1)
+                else:
+                    random.seed(self.random_state)
                 random.shuffle(self.order[self.index_stage])
-
+            if self.feature_traverse[self.index_stage] in [FeatureTraverse.CYCLIC_RANDOM_REVERSE, FeatureTraverse.CYCLIC_REVERSE] \
+                    and self.random_state % 2 == 1:
+                self.order[self.index_stage] = self.order[self.index_stage][::-1]
+            interaction_constraints_base = [interaction_constraints_base[i] for i in self.order[self.index_stage]]
         start = time.time()
         params = {'eta': self.learning_rate,
+                  #'single_precision_histogram': True,
                   'max_depth': 3,
                   'objective': self.objective,
-                  'max_leaves': self.num_leaves,
+                  'max_leaves': self.max_leaves,
                   'tree_method': 'hist',
                   'max_bin': max_bin,
                   'colsample_bytree': colsample_bytree,
@@ -171,7 +172,6 @@ class ExplainableGBMCore(BaseEstimator, RegressorMixin):
                   'interaction_constraints': str(interaction_constraints_base),
                   'validate_parameters': False,
                   'seed': self.random_state,
-                  #'seed_per_iteration': True,  #
                   'alpha': self.reg_l1[self.index_stage],
                   # Lasso tends to do well if there are a small number of significant parameters  from: https://www.datacamp.com/tutorial/tutorial-ridge-lasso-elastic-net
                   'lambda': self.reg_l2[self.index_stage],
@@ -185,31 +185,26 @@ class ExplainableGBMCore(BaseEstimator, RegressorMixin):
         if self.objective == 'survival:cox':
             params.update({'eval_metric': 'cox-nloglik'})
 
-        train = xgb.DMatrix(X[:, self.order[self.index_stage]], label=y)
-        val = xgb.DMatrix(X_val[:, self.order[self.index_stage]], label=Y_val)
+        train = xgb.DMatrix(X, label=y)
+        val = xgb.DMatrix(X_val, label=Y_val)
 
-        total_rounds = self.max_rounds * num_fgroups
-
-        early_stopping_rounds = self.early_stopping_rounds * num_fgroups
-        early_stop = xgb.callback.EarlyStopping(rounds=early_stopping_rounds,
-                                                min_delta=self.early_stopping_tolerance)
         train.set_base_margin(self.predict_uni)
         val.set_base_margin(self.predict_uni_val)
-        #if not self.feature_traverse_cyclic:
-        self.booster = xgb.train(params, train, total_rounds, evals=[(val, 'eval')],
-                                 verbose_eval=False,
-                                 callbacks=[early_stop])
-        #else:
-        #    params['interaction_constraints'] = None
-        #    params['colsample_bytree'] = 1
-        #    for i in range(total_rounds):
-        #        feature = i % self.n_features_in_
-        #        train = xgb.DMatrix(X[:, feature:(feature+1)], label=y)
-        #        self.booster = xgb.train(params, train, 1, verbose_eval=False, xgb_model=self.booster)
+        total_iterations = self.max_rounds * num_fgroups
+
+        if self.early_stopping_rounds > 0:
+            early_stopping_iterations = self.early_stopping_rounds * num_fgroups
+            early_stop = xgb.callback.EarlyStopping(rounds=early_stopping_iterations,
+                                                    min_delta=self.early_stopping_tolerance)
+            self.booster = xgb.train(params, train, total_iterations, evals=[(val, 'eval')],
+                                     verbose_eval=False,
+                                     callbacks=[early_stop])
+        else:
+            self.booster = xgb.train(params, train, total_iterations, verbose_eval=False)
 
         if DEBUG_MODE:
             print(params)
-            print("max round %d early stop %d" % (
+            print("max iterations %d early stop iterations %d" % (
             self.max_rounds * num_fgroups, self.early_stopping_rounds * num_fgroups))
         self.time_train += time.time() - start
         start = time.time()
@@ -244,11 +239,6 @@ class ExplainableGBMCore(BaseEstimator, RegressorMixin):
 
         f = int(tree['split'][1:])  # tree['split_feature']
         tree_thres = int(tree['split_condition'])
-
-        if self.feature_traverse[self.index_stage] in [FeatureTraverse.CYCLIC, FeatureTraverse.CYCLIC_RANDOM]:
-            f = self.curr_tree_index % self.n_features_in_
-            if self.feature_traverse[self.index_stage] == FeatureTraverse.CYCLIC_RANDOM:
-                f = self.order[self.index_stage][f] # return to the original order
 
         # print(int(tree['threshold']))
         if f not in limits_dic:
@@ -311,7 +301,8 @@ class ExplainableGBMCore(BaseEstimator, RegressorMixin):
         return True
 
     def extract_shape_functions(self):
-
+        """ Extract the shape functions from the trees trained by XGBoost.
+        """
         import json
         self.inter_2_index = {(val[0], val[1]): i for i, val in enumerate(self.interactions_chosen)}
         if DEBUG_MODE:
@@ -329,8 +320,8 @@ class ExplainableGBMCore(BaseEstimator, RegressorMixin):
         self.num_trees = len(model)
         if DEBUG_MODE:
             print("num trees %d" % self.num_trees)
-        for tree_index in range(min((self.booster.best_iteration + 1) * self.inner_bags + 1, self.num_trees)):
-            self.curr_tree_index=tree_index
+        for tree_index in range(min(self.booster.best_ntree_limit, self.num_trees)):
+            self.curr_tree_index = tree_index
             tree_json = json.loads(model[tree_index])
             self.extract_shape_functions_helper(tree_json, {})
             self.fit_order[self.index_stage] += [self.fit_order_curr]
@@ -413,63 +404,72 @@ class ExplainableGBMCore(BaseEstimator, RegressorMixin):
 
 
 class ExplainableGBM(BaseEstimator, RegressorMixin):
-    """
-    A meta regressor that outputs a transparent, explainable model given blackbox models.
 
-    It works exactly like the `ExplainableBoostingRegressor` by the interpretml team, but here you can choose any base regressor instead of
-    being restricted to trees. For example, you can use scikit-learn's `IsotonicRegression` to create a model that is
-    monotonically increasing or decreasing in some of the features, while still being explainable and well-performing.
-
-    See the notes below to find a nice explanation of how the algorithm works at a high level.
-
-    Parameters
-    ----------
-    base_regressor : Any, default=DecisionTreeRegressor(max_leaves=3)
-        A single scikit-learn compatible regressor
-
-    max_rounds : int, default=2000
-        Conduct the boosting for these many rounds.
-
-    learning_rate : float, default=0.01
-        The learning rate. Should be quite small.
-
-    max_bins : int, default=256
-        The more grid points, the
-
-            - more detailed the explanations get and
-            - the better the model performs, but
-            - the slower the algorithm gets.
-
-    Notes
-    -----
-    Check out the original author's Github at https://github.com/interpretml/interpret and https://www.youtube.com/watch?v=MREiHgHgl0k
-    for a great introduction into the operations of the algorithm.
-    """
-
+    """ Explainable Boosting.
+    It works exactly like the `ExplainableBoostingRegressor`/ `ExplainableBoostingClassifier` by the interpretml team,
+    but here we use XGBoost as base gradient boosting model. That mean that you can choose any of the
+    Learning Task Parameters of XGBoost (https://xgboost.readthedocs.io/en/stable/parameter.html).
+    You can also set Monotonic restrictions in some features.
+     Args:
+         feature_names: List of feature names.
+         max_bins: Max number of bins per feature for pre-processing stage on main effects (we use "quantile" method to bin values).
+         max_interaction_bins: Max number of bins per feature for pre-processing stage on interaction terms. Only used if interactions is non-zero.
+         interactions: Integer for number of automatically detected interactions.
+         outer_bags: Number of outer bags.
+         inner_bags: Number of inner bags. inner_bags=1 in ExplainableGBM is same as inner_bags=0 in EBM.
+         learning_rate: Learning rate for boosting.
+         validation_size: Validation set size for boosting.
+         early_stopping_rounds: Number of rounds of no improvement to trigger early stopping.
+         early_stopping_tolerance: Tolerance that dictates the smallest delta required to be considered an improvement.
+         max_rounds: Number of rounds for boosting.
+         max_leaves: Maximum leaf nodes used in boosting on main effects.
+         max_leaves_inter: Maximum leaf nodes used in boosting interaction terms.
+         objective: Specify the learning task and the corresponding learning objective.
+         Examples -  'reg:squarederror' (regression with squared loss),
+          'binary:logistic'(logistic regression for binary classification,
+           output probability),"survival:cox"(Cox regression for right censored survival time data).
+            More details here - https://xgboost.readthedocs.io/en/stable/parameter.html .
+         reg_l2: Array - first value for main effect, second for interactions. L2 regularization term on weights.
+         reg_l1: Array - first value for main effect, second for interactions. L1 regularization term on weights.
+         feature_traverse: Array - first value for main effect, second for interactions.
+         Feature group traverse methods used (main effects / interaction terms).
+         * FeatureTraverse.CYCLIC - Deterministic selection by cycling through features groups one at a time.
+         * FeatureTraverse.CYCLIC_RANDOM - Similar to FeatureTraverse.CYCLIC but with random feature groups shuffling for each outher bag.
+         * FeatureTraverse.RANDOM- Random feature groups selection.
+         * FeatureTraverse.BEST_FIT - The default behaviour in XGBoost. Gives all the features to tree.
+         The tree will choose the best fitted feature.
+         subsample: Subsample ratio of the training instances. Subsampling will occur once in every boosting iteration.
+         monotone_constraints: Constraint of variable monotonicity.
+          More details here - https://xgboost.readthedocs.io/en/stable/tutorials/monotonic.html.
+         del_booster: Boolean. Delete XGboost booster. XGBoost booster can take a lot of memory and is not needed after training.
+         n_jobs: Number of jobs to run in parallel.
+         random_state: Random state.
+     """
     def __init__(
             self,
-            max_rounds: Any = 5000,
-            learning_rate: float = 0.01,
+            feature_names=None,
             max_bins: int = 256,
             max_interaction_bins: int = 32,
-            feature_names=None,
+            interactions=10,
+            outer_bags=8,
+            inner_bags=1,
+            learning_rate: float = 0.01,
+            validation_size=0.15,
             early_stopping_rounds=50,
             early_stopping_tolerance=1e-4,
-            validation_size=0.15,
-            outer_bags=8,
-            interactions=10,
+            max_rounds: Any = 5000,
+            max_leaves=3,
+            max_leaves_inter=8,
             objective='reg:squarederror',
-            num_leaves=3,
-            num_leaves_inter=8,
-            n_jobs=-2,
-            random_state=43,
             reg_l2=[0, 4],
             reg_l1=[0, 0],
             feature_traverse=[FeatureTraverse.CYCLIC_RANDOM, FeatureTraverse.CYCLIC_RANDOM],
             subsample=0.5,
-            inner_bags=10,  # inner_bags=1 in EGB is same as inner_bags=0 in EBM
             monotone_constraints=None,
-            del_booster=True
+            del_booster=True,
+            n_jobs=-2,
+            random_state=43,
+
     ) -> None:
         self.monotone_constraints = monotone_constraints
         self.del_booster = del_booster
@@ -481,8 +481,8 @@ class ExplainableGBM(BaseEstimator, RegressorMixin):
         self.reg_l1 = reg_l1
         self.n_jobs = n_jobs
         self.random_state = random_state
-        self.num_leaves = num_leaves
-        self.num_leaves_inter = num_leaves_inter
+        self.max_leaves = max_leaves
+        self.max_leaves_inter = max_leaves_inter
         self.objective = objective
         self.interactions = interactions
         self.interactions_chosen = []
@@ -514,21 +514,14 @@ class ExplainableGBM(BaseEstimator, RegressorMixin):
     def fit(
             self, X, y: np.ndarray) \
             -> ExplainableGBM:
-        """
-        Fit the model.
+        """ Fits model to provided samples.
 
-        Parameters
-        ----------
-        X : np.ndarray of shape (n_samples, n_features)
-            The training data.
+        Args:
+            X: Numpy array for training samples.
+            y: Numpy array as training labels.
 
-        y : np.ndarray, 1-dimensional
-            The target values.
-
-        Returns
-        -------
-        ExplainableBoostingMetaRegressor
-            Fitted regressor.
+        Returns:
+            Itself.
         """
         self.outputs_ = []
         self.outputs_inter_ = []
@@ -612,9 +605,9 @@ class ExplainableGBM(BaseEstimator, RegressorMixin):
         self.estimators = []
         for i in range(self.outer_bags):
             self.estimators.append(ExplainableGBMCore(
-                max_rounds=self.max_rounds, learning_rate=self.learning_rate, num_leaves=self.num_leaves,
+                max_rounds=self.max_rounds, learning_rate=self.learning_rate, max_leaves=self.max_leaves,
                 subsample=self.subsample,
-                random_state=2+2*i, early_stopping_rounds=self.early_stopping_rounds,
+                random_state=i, early_stopping_rounds=self.early_stopping_rounds,
                 early_stopping_tolerance=self.early_stopping_tolerance,
                 preprocessor=self.preprocessor_, preprocessor_inter=self.preprocessor_inter,
                 monotone_constraints=self.monotone_constraints, objective=self.objective,
@@ -661,7 +654,7 @@ class ExplainableGBM(BaseEstimator, RegressorMixin):
 
             for i in range(self.outer_bags):
                 self.estimators[i].interactions_chosen = self.interactions_chosen
-                self.estimators[i].num_leaves = self.num_leaves_inter
+                self.estimators[i].max_leaves = self.max_leaves_inter
 
             if not DEBUG_MODE:
                 self.estimators = Parallel(n_jobs=self.n_jobs)(
@@ -742,17 +735,16 @@ class ExplainableGBM(BaseEstimator, RegressorMixin):
 
         return top_pairs_all
 
-    def predict(self, X, raw=False, bin=True):
-        """
-        Predict the conditional distribution of Y at the points X=x
+    def predict(self, X, both_classes=False, bin=True):
+        """ Predicts on provided samples.
 
-        Parameters:
-            X         : DataFrame object or List or
-                        numpy array of predictors (n x p) in numeric format.
-            max_iter  : get the prediction at the specified number of boosting iterations
+        Args:
+            X: Numpy array for samples.
+            both_classes: If its binary classification return prediction for both classes.
+            bin: Transform provided samples?.
 
-        Output:
-            A NGBoost distribution object
+        Returns:
+            Predicted class label per sample.
         """
         if isinstance(X, pd.DataFrame):
             X = X.values
@@ -779,24 +771,24 @@ class ExplainableGBM(BaseEstimator, RegressorMixin):
             if log_odds_vector.ndim == 1:
                 log_odds_vector = np.c_[np.zeros(log_odds_vector.shape), log_odds_vector]
             res = softmax(log_odds_vector)
-            if not raw:
-                res = res[:, 1]  # .round().astype(int)
+            if not both_classes:
+                res = res[:, 1]
         return res
 
     def predict_proba(self, X):
-        return self.predict(X, raw=True)
+        return self.predict(X, both_classes=True)
 
     def explain_local(self, X, bin=True, add_std=False):
-        """
-        Predict the conditional distribution of Y at the points X=x
+        """ Provides local explanations for provided samples.
 
-        Parameters:
-            X         : DataFrame object or List or
-                        numpy array of predictors (n x p) in numeric format.
-            max_iter  : get the prediction at the specified number of boosting iterations
+        Args:
+            X: Numpy array for X to explain.
+            bin: Transform provided samples?.
+            add_std: Add standard deviation to the explanation?.
 
-        Output:
-            A NGBoost distribution object
+        Returns:
+            An explanation object, visualizing feature-value pairs
+            for each sample as horizontal bar charts.
         """
         if isinstance(X, pd.DataFrame):
             X = X.values
@@ -825,13 +817,17 @@ class ExplainableGBM(BaseEstimator, RegressorMixin):
 
         if add_std:
             return explain, explain_std
+
         return explain
 
     def explain_global(self, only_inter=False):
         """Provides global explanation for model.
+
         Args:
-            name: User-defined explanation name.
+            only_inter: Return only interactions.
+
         Returns:
+
             An explanation object,
             visualizing feature-value pairs as horizontal bar chart.
         """
@@ -1024,48 +1020,104 @@ class ExplainableGBM(BaseEstimator, RegressorMixin):
 
 
 def test_extract_shape_function():
-    from utils_data import gen_synth_data
-    X, Y, x_to_loc, x_to_scale = gen_synth_data(noise_c=0, add_inter=False, n=200)
-    n_rounds = 5
-    outer_bags = 1
-    inner_bags = 5
-    l_r = 0.01
-    egbm = ExplainableGBM(interactions=0, learning_rate=l_r,
-                                    max_rounds=n_rounds, feature_traverse=[FeatureTraverse.CYCLIC_RANDOM, FeatureTraverse.CYCLIC_RANDOM],
-                                    del_booster=False, outer_bags=outer_bags, inner_bags=inner_bags).fit(X, Y)
-    egbm_predictions = egbm.predict(X)
-    rmse_egbm = np.sqrt(mean_squared_error(Y, egbm_predictions))
-    print(rmse_egbm)
-    print(egbm.num_trees_main)
 
-    print(egbm.estimators[0].fit_order)
-    for i in range(len(egbm.estimators)):
-        fit_order = pd.Series(egbm.estimators[i].fit_order)
-        print(fit_order.value_counts())
-    print(egbm.estimators[0].booster.get_dump(dump_format='json'))
-    """
-    egbm = ExplainableGBM(interactions=0, outer_bags=1, max_bins=32, max_rounds=500, inner_bags=10, subsample=0.5,
-                          del_booster=False).fit(X, Y)
+    import pytest
+
+    from benchmark_regression_classification import gen_synth_data_ordering_exp
+    dataset = gen_synth_data_ordering_exp(num_f=5, n=1000)
+    X, Y = dataset['full']['X'], dataset['full']['y']
+
+    egbm = ExplainableGBM(interactions=0, outer_bags=1, max_bins=32, inner_bags=1, subsample=1,
+                          feature_traverse=[FeatureTraverse.RANDOM, FeatureTraverse.RANDOM], del_booster=False).fit(X, Y)
+    # predictions from egb
     egbm_predictions = egbm.predict(X)
+    egbm_predictions = egbm_predictions + np.mean(Y - egbm_predictions)
     rmse_egbm = np.sqrt(mean_squared_error(Y, egbm_predictions))
     print(rmse_egbm)
 
     binned_x = egbm.preprocessor_.transform(X.values)
     dmatrix = xgb.DMatrix(binned_x)
-    egbm_booster_predictions = egbm.estimators[0].booster.predict(dmatrix)
+    # predictions from xgboost
+    best_ntree_limit = egbm.estimators[0].booster.best_ntree_limit
+    print(best_ntree_limit, egbm.estimators[0].booster.best_iteration)
+    egbm_booster_predictions = egbm.estimators[0].booster.predict(dmatrix, iteration_range=(0, egbm.estimators[0].booster.best_iteration+1))
     egbm_booster_predictions = egbm_booster_predictions + np.mean(Y - egbm_booster_predictions)
     rmse_booster = np.sqrt(mean_squared_error(Y, egbm_booster_predictions))
     print(rmse_booster)
+    assert rmse_egbm == pytest.approx(rmse_booster)
 
+    # predictions from single estimator
     egbm_xgbcore_predictions = egbm.estimators[0].predict(binned_x)
     egbm_xgbcore_predictions = egbm_xgbcore_predictions + np.mean(Y - egbm_xgbcore_predictions)
     rmse_core = np.sqrt(mean_squared_error(Y, egbm_xgbcore_predictions))
     print(rmse_core)
 
-    import pytest
     assert rmse_core == pytest.approx(rmse_booster)
-    assert rmse_egbm == pytest.approx(rmse_booster)
-    """
+
+
+def test_feature_traverse():
+
+    from benchmark_regression_classification import gen_synth_data_ordering_exp
+    num_f = 5
+    dataset = gen_synth_data_ordering_exp(num_f=num_f, n=1000)
+    X, Y = dataset['full']['X'], dataset['full']['y']
+
+    egbm = ExplainableGBM(interactions=0, max_rounds=2,
+                          feature_traverse=[FeatureTraverse.CYCLIC_RANDOM_REVERSE, FeatureTraverse.CYCLIC_RANDOM_REVERSE],
+                                    del_booster=False, outer_bags=2, inner_bags=1).fit(X, Y)
+    egbm_predictions = egbm.predict(X)
+    rmse_egbm_cyclic_reverse = np.sqrt(mean_squared_error(Y, egbm_predictions))
+
+    print(egbm.estimators[0].fit_order, egbm.estimators[1].fit_order)
+
+    # in cycle all the rounds in all thes tsimators are equal. its from difernt index in each bag so we add 1 and 2
+    assert egbm.estimators[0].fit_order[0][1:num_f+1] == egbm.estimators[1].fit_order[0][2:num_f+2][::-1]
+
+    egbm = ExplainableGBM(interactions=0, max_rounds=2,
+                          feature_traverse=[FeatureTraverse.CYCLIC, FeatureTraverse.CYCLIC],
+                                    del_booster=False, outer_bags=2, inner_bags=1).fit(X, Y)
+    egbm_predictions = egbm.predict(X)
+    rmse_egbm_cyclic = np.sqrt(mean_squared_error(Y, egbm_predictions))
+
+    print(egbm.estimators[0].fit_order)
+    print(egbm.estimators[1].fit_order)
+
+    # in cycle all the rounds in all thes tsimators are equal
+    assert egbm.estimators[0].fit_order == egbm.estimators[1].fit_order
+
+    egbm = ExplainableGBM(interactions=0, max_rounds=2,
+                          feature_traverse=[FeatureTraverse.CYCLIC_RANDOM, FeatureTraverse.CYCLIC_RANDOM],
+                                    del_booster=False, outer_bags=2, inner_bags=1).fit(X, Y)
+    egbm_predictions = egbm.predict(X)
+    rmse_egbm_cyclic_rand = np.sqrt(mean_squared_error(Y, egbm_predictions))
+
+    print(egbm.estimators[0].fit_order)
+    print(egbm.estimators[1].fit_order)
+
+    # in cycle all the rounds in all each estimator are equal, but rounds between estimators are different
+    assert egbm.estimators[0].fit_order != egbm.estimators[1].fit_order
+    assert egbm.estimators[0].fit_order[0][:num_f] == egbm.estimators[0].fit_order[0][num_f:]
+
+    egbm = ExplainableGBM(interactions=0, max_rounds=2,
+                          feature_traverse=[FeatureTraverse.RANDOM, FeatureTraverse.RANDOM],
+                                    del_booster=False, outer_bags=2, inner_bags=1).fit(X, Y)
+    egbm_predictions = egbm.predict(X)
+    rmse_egbm_rand = np.sqrt(mean_squared_error(Y, egbm_predictions))
+
+    print(egbm.estimators[0].fit_order)
+    print(egbm.estimators[1].fit_order)
+
+    # in random all the rounds in all  estimators are different
+    assert egbm.estimators[0].fit_order != egbm.estimators[1].fit_order
+    assert egbm.estimators[0].fit_order[0][:num_f] != egbm.estimators[0].fit_order[0][num_f:]
+
+    print(rmse_egbm_rand, rmse_egbm_cyclic_rand, rmse_egbm_cyclic)
+
+    # error should be equal
+    assert rmse_egbm_rand == rmse_egbm_cyclic_rand
+    assert rmse_egbm_rand == rmse_egbm_cyclic
+
 
 if __name__ == '__main__':
+
     pass
