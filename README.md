@@ -1,6 +1,5 @@
 ======================
-EGBoost – a Generic Method to Fit Interpretable
-and Trustworthy GAMs with Interactions
+EGBoost
 ======================
 
 # Introduction 
