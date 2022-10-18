@@ -1,4 +1,3 @@
-======================
 EGBoost – a Generic Method to Fit Interpretable
 and Trustworthy GAMs with Interactions
 ======================
@@ -22,6 +21,7 @@ cd build
 cmake ..
 make -j$(nproc)
 ```
+
 For more details on building XGboost from source, see `build <https://xgboost.readthedocs.io/en/latest/build.html>`_.
 
 # Description
