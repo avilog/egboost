@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, 'xgboost/python-package')
+sys.path.insert(0, 'xgboost_compiled/python-package')
 import xgboost as xgb
 import egboost
 import pickle
@@ -1071,7 +1071,7 @@ def cross_validate(file_name, func_eva, save_summary=True, only_gams=False, data
         feature_traverse = params["feature_traverse"]
 
         if params['dataset_fun'] != gen_synth_data_ordering_exp:
-            if feature_traverse not in [[E_C, E_C], [E_CRR, E_CRR], [E_BF, E_BF], [E_C, E_BF]]:
+            if feature_traverse not in [[E_C, E_C], [E_CRE, E_CRE], [E_BF, E_BF], [E_C, E_BF]]:
                 continue
             if params["n_features"] > 2:
                 continue

@@ -10,7 +10,7 @@ from sklearn.utils.validation import check_is_fitted
 import sys
 import gc
 from enum import Enum
-sys.path.insert(0, 'xgboost/python-package')
+sys.path.insert(0, 'xgboost_compiled/python-package')
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from itertools import combinations

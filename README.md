@@ -12,7 +12,11 @@ Acadamic supervision was done by  Prof. Oded Margalit and Prof. Gera Weiss.
 # Installation
 To install, clone the repository and make sure to install all the required python modules.
 
-XGBoost: We modified its code, so we need to build from source. Please run:
+XGBoost: We modified its code, so we need to build from source.
+There are 2 options:
+- Use our precompiled directory - *xgboost_compiled*. No need to change anything.
+- Compile yourself. Delete the folder *xgboost_compiled*. rename *xgboost* to *xgboost_compiled*.
+And please run:
 ```
 git submodule update --init --recursive
 cd xgboost
