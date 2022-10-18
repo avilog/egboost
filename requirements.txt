@@ -1,0 +1,11 @@
+# general python packages
+numpy
+pandas
+matplotlib
+pickle
+scipy
+
+# model specific modules through pip
+interpret=0.2.7
+pygam=0.8.0
+sklearn
