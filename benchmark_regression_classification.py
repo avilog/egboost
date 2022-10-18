@@ -177,6 +177,11 @@ class XGMModel(BaseEstimator):
         test = xgb.DMatrix(X)
         return self.model.predict(test)
 
+
+def get_abs_dir(rel_path):
+    return Path(__file__).resolve().parent / Path(rel_path)
+
+
 def add_dataset_stats(dataset):
     dataset['num_rows'] = dataset['full']['X'].shape[0]
     dataset['num_features'] = dataset['full']['X'].shape[1]
@@ -207,7 +212,7 @@ def add_dataset_stats(dataset):
 
 def load_compas_data():
     # COMPAS: https://www.kaggle.com/danofer/compass
-    df = pd.read_csv(r'data/uci/propublica_data_for_fairml.csv')
+    df = pd.read_csv(get_abs_dir('data/uci/propublica_data_for_fairml.csv'))
     TARGET_COL = "Two_yr_Recidivism"
     X = df.drop([TARGET_COL], axis=1)
     y = df[TARGET_COL]
@@ -227,7 +232,7 @@ def load_adult_data():
     #    "https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data",
     #    header=None)
     df = pd.read_csv(
-        "data/uci/adult.data",
+        get_abs_dir("data/uci/adult.data"),
         header=None)
     df.columns = [
         "Age", "WorkClass", "fnlwgt", "Education", "EducationNum",
@@ -253,7 +258,7 @@ def load_adult_data():
 
 def load_telco_churn_data():
     # https://www.kaggle.com/blastchar/telco-customer-churn/downloads/WA_Fn-UseC_-Telco-Customer-Churn.csv/1
-    df = pd.read_csv(r'data/surv/telco_churn.csv')
+    df = pd.read_csv(get_abs_dir('data/surv/telco_churn.csv'))
     # small number of the values are not recognized as numbers, so binning it will give us all the unique values (6532)
     # It increase the running of learning interactions in EBM by alot (10 sec before fixing, 1 sec after)
     df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
@@ -291,8 +296,7 @@ def load_fico_score_data():
     """
 
     # Create column names
-    attr_dict_path = r'data/fico/fico_score.attr'
-    attributes = open(attr_dict_path, 'r').readlines()
+    attributes = open(get_abs_dir('data/fico/fico_score.attr'), 'r').readlines()
     column_names = [x.split(':')[0] for x in attributes]
 
     df = pd.read_csv(
@@ -333,7 +337,7 @@ def load_breast_data():
 
 
 def load_support2_data():
-    support = pd.read_csv(r'data/support2/support2.csv')
+    support = pd.read_csv(get_abs_dir('data/support2/support2.csv'))
     X_df = support.drop('hospdead', axis=1)
     y_df = support['hospdead']
 
@@ -365,8 +369,8 @@ def load_support2_data():
 
 
 def load_bike_sharing_data():
-    data = pd.read_csv("data/uci/Bike-Sharing-Dataset/hour.csv").drop(["instant", "dteday", "casual", "registered"],
-                                                                      axis=1)
+    data = pd.read_csv(get_abs_dir("data/uci/Bike-Sharing-Dataset/hour.csv")).\
+        drop(["instant", "dteday", "casual", "registered"], axis=1)
     X, y = data.iloc[:, :-1], data.iloc[:, -1]
     dataset = {
         'dataset_name': 'bike',
@@ -393,7 +397,7 @@ def load_california_housing_data():
         'medianHouseValue'
     ]
 
-    df = pd.read_csv("data/cal_housing.data")
+    df = pd.read_csv(get_abs_dir("data/cal_housing.data"))
     df.columns = feature_names
 
     target_col = df.columns[-1]
@@ -423,7 +427,7 @@ def load_california_housing_data_monotone():
 
 
 def load_wine_data():
-    df = pd.read_csv("data/uci/winequality-white.csv", delimiter=';')
+    df = pd.read_csv(get_abs_dir("data/uci/winequality-white.csv", delimiter=';'))
     target_col = 'quality'
     X, y = df.drop([target_col], axis=1), df[target_col]
 
@@ -441,8 +445,8 @@ def load_wine_data():
 def load_crimes_data():
     # Data from:http://archive.ics.uci.edu/ml/datasets/Communities+and+Crime.
     #https://github.com/vbordalo/Communities-Crime/blob/master/Crime_v1.ipynb
-    attrib = pd.read_csv('data/uci/communities_attributes.csv', delim_whitespace=True)
-    data = pd.read_csv('data/uci/communities.data', names=attrib['attributes'])
+    attrib = pd.read_csv(get_abs_dir('data/uci/communities_attributes.csv'), delim_whitespace=True)
+    data = pd.read_csv(get_abs_dir('data/uci/communities.data'), names=attrib['attributes'])
     data = data.drop(columns=['state', 'county',
                               'community', 'communityname',
                               'fold'], axis=1)
@@ -468,10 +472,10 @@ def load_crimes_data():
 def load_nhanesi_data():
     # Data from: https://wwwn.cdc.gov/nchs/nhanes/nhanes1/ with mortality data from the NHANES I Epidemiologic Followup Study.
     # packaged data from: https://github.com/slundberg/shap/tree/master/data
-    X = pd.read_csv("data/nahnesi/NHANESI_X.csv", index_col=0)
+    X = pd.read_csv(get_abs_dir("data/nahnesi/NHANESI_X.csv"), index_col=0)
     X["sex_isFemale"] = X["sex_isFemale"].replace({True: "Female", False: "Male"})
     X = X.rename({"sex_isFemale": "sex"}, axis=1)
-    y = pd.read_csv("data/nahnesi/NHANESI_y.csv", index_col=0)["y"]
+    y = pd.read_csv(get_abs_dir("data/nahnesi/NHANESI_y.csv"), index_col=0)["y"]
     dataset = {
         'dataset_name': 'NHANES I',
         'problem': 'survival',
@@ -539,10 +543,9 @@ def format_n(x):
     return "{0:.3f}".format(x)
 
 
-def save_load_model(dataset, name, split_idx, model=None):
+def save_load_model(dataset, name, split_idx, model=None, output_dir="models"):
     import os
-    output_dir = "models/"
-    model_path = os.path.join(output_dir, '%s_%s_%d.pkl' % (dataset, name, split_idx))
+    model_path = get_abs_dir(output_dir / Path('%s_%s_%d.pkl' % (dataset, name, split_idx)))
     if model is not None:
         pickle.dump(model, open(model_path, 'wb'))
     else:
@@ -589,7 +592,7 @@ def get_model(params, problem, X, ct=None):
     base_model = params["base_model"]
     reg_l2 = params["reg_l2"]
     n_rounds = params["n_rounds"]
-    early_stop = params["n_rounds"]
+    early_stop = params["early_stop"]
     monotone_constraints = None
 
     if "monotone_constraints" in params:
@@ -1047,11 +1050,12 @@ def cross_validate(file_name, func_eva, save_summary=True, only_gams=False, data
     E_BF = egboost.FeatureTraverse.BEST_FIT
     E_R = egboost.FeatureTraverse.RANDOM
     E_C = egboost.FeatureTraverse.CYCLIC
+    E_CR = egboost.FeatureTraverse.CYCLIC_RANDOM
     E_CRE = egboost.FeatureTraverse.CYCLIC_REVERSE
 
     grid = ParameterGrid(
         {'dataset_fun': datasets_list, 'base_model': ["EGB_XGB_GAM", "EBM_GAM",  "EBM_GA2M", "EGB_XGB_GA2M", "XGB", "Spline"],
-         'feature_traverse': [[E_CRE, E_CRE], [E_C, E_C], [E_R, E_R], [E_C, E_BF], [E_BF, E_BF]],
+         'feature_traverse': [[E_CRE, E_CRE], [E_C, E_C], [E_CR, E_CR], [E_R, E_R], [E_C, E_BF], [E_BF, E_BF]],
          'n_features': [10, 100, 1000]
          })
 
@@ -1073,7 +1077,7 @@ def cross_validate(file_name, func_eva, save_summary=True, only_gams=False, data
         if params['dataset_fun'] != gen_synth_data_ordering_exp:
             if feature_traverse not in [[E_C, E_C], [E_CRE, E_CRE], [E_BF, E_BF], [E_C, E_BF]]:
                 continue
-            if params["n_features"] > 2:
+            if params["n_features"] > 10:
                 continue
             dataset = params['dataset_fun']()
         else:
@@ -1170,6 +1174,10 @@ if __name__ == "__main__":
             del dataset['full']
             datasets_desc += [dataset]
         pd.DataFrame(datasets_desc).to_csv("datasets_desc.csv")
+
+    if RUN_FEATURE_SPARSENESS:
+        cross_validate("feature_sparseness_results", get_feature_sparseness, save_summary=False, only_gams=True)
+        save_feature_sparseness_summary()
 
     if RUN_ACCURACY:
         cross_validate("accuracy_results", get_accuracy)
