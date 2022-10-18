@@ -427,7 +427,7 @@ def load_california_housing_data_monotone():
 
 
 def load_wine_data():
-    df = pd.read_csv(get_abs_dir("data/uci/winequality-white.csv", delimiter=';'))
+    df = pd.read_csv(get_abs_dir("data/uci/winequality-white.csv"), delimiter=';')
     target_col = 'quality'
     X, y = df.drop([target_col], axis=1), df[target_col]
 
