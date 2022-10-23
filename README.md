@@ -15,7 +15,7 @@ To install, clone the repository and make sure to install all the required pytho
 XGBoost: We modified its code, so we need to build from source.
 There are 2 options:
 - Use our precompiled directory - *xgboost_compiled*. No need to change anything.
-- Compile yourself. Please run:
+- Compile yourself. Please run (modiffied Git URL: https://github.com/avilog/xgboost):
 ```
 git submodule update --init --recursive
 rm -R xgboost_compiled
